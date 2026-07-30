@@ -12,10 +12,13 @@ Schedule via GitHub Actions (.github/workflows/keep_alive.yml) — runs every 23
 """
 import urllib.request
 import urllib.error
+import time
 from datetime import datetime, timezone
 
 SPACE_APP_URL = "https://stats-powered-ai-statdetectllm.hf.space"
 HEALTH_URL    = f"{SPACE_APP_URL}/_stcore/health"
+MAX_ATTEMPTS = 5
+RETRY_DELAY_SECONDS = 15
 
 
 def ping(url: str, label: str) -> bool:
@@ -41,7 +44,21 @@ def ping(url: str, label: str) -> bool:
         return False
 
 
+def run_keep_alive(attempts: int = MAX_ATTEMPTS, retry_delay: int = RETRY_DELAY_SECONDS) -> int:
+    """Retry the health/page checks to tolerate temporary wake-up outages."""
+    for attempt in range(1, attempts + 1):
+        ok1 = ping(HEALTH_URL,    "Health check  ")
+        ok2 = ping(SPACE_APP_URL, "App page visit")
+        if ok1 and ok2:
+            return 0
+
+        if attempt < attempts:
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            print(f"[{ts}] WARN Retrying both checks in {retry_delay}s (attempt {attempt + 1}/{attempts})")
+            time.sleep(retry_delay)
+
+    return 1
+
+
 if __name__ == "__main__":
-    ok1 = ping(HEALTH_URL,    "Health check  ")
-    ok2 = ping(SPACE_APP_URL, "App page visit")
-    raise SystemExit(0 if (ok1 and ok2) else 1)
+    raise SystemExit(run_keep_alive())
