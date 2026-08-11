@@ -12,33 +12,40 @@ Schedule via GitHub Actions (.github/workflows/keep_alive.yml) — runs every 23
 """
 import urllib.request
 import urllib.error
+import time
 from datetime import datetime, timezone
 
 SPACE_APP_URL = "https://stats-powered-ai-statdetectllm.hf.space"
 HEALTH_URL    = f"{SPACE_APP_URL}/_stcore/health"
+MAX_RETRIES = 4
+RETRY_DELAY_SECONDS = 15
 
 
 def ping(url: str, label: str) -> bool:
     """Send a GET request to url and print the result. Returns True on HTTP 2xx."""
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "keep-alive-bot/1.0"},
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            if 200 <= resp.status < 300:
-                print(f"[{ts}] OK  {label}: HTTP {resp.status}")
-                return True
-            else:
-                print(f"[{ts}] WARN {label}: unexpected HTTP {resp.status}")
-                return False
-    except urllib.error.URLError as e:
-        print(f"[{ts}] FAIL {label}: {e}")
-        return False
-    except Exception as e:
-        print(f"[{ts}] FAIL {label}: unexpected error: {e}")
-        return False
+    for attempt in range(1, MAX_RETRIES + 1):
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "keep-alive-bot/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                if 200 <= resp.status < 300:
+                    print(f"[{ts}] OK  {label}: HTTP {resp.status} (attempt {attempt}/{MAX_RETRIES})")
+                    return True
+                print(f"[{ts}] WARN {label}: unexpected HTTP {resp.status} (attempt {attempt}/{MAX_RETRIES})")
+        except urllib.error.HTTPError as e:
+            print(f"[{ts}] WARN {label}: HTTP {e.code} (attempt {attempt}/{MAX_RETRIES})")
+        except urllib.error.URLError as e:
+            print(f"[{ts}] WARN {label}: {e} (attempt {attempt}/{MAX_RETRIES})")
+        except Exception as e:
+            print(f"[{ts}] WARN {label}: unexpected error: {e} (attempt {attempt}/{MAX_RETRIES})")
+
+        if attempt < MAX_RETRIES:
+            time.sleep(RETRY_DELAY_SECONDS)
+
+    return False
 
 
 if __name__ == "__main__":
