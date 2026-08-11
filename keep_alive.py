@@ -19,6 +19,7 @@ SPACE_APP_URL = "https://stats-powered-ai-statdetectllm.hf.space"
 HEALTH_URL    = f"{SPACE_APP_URL}/_stcore/health"
 MAX_ATTEMPTS = 4
 RETRY_DELAY_SECONDS = 15
+RETRYABLE_HTTP_STATUS_CODES = {408, 429}
 
 
 def ping(url: str, label: str) -> bool:
@@ -35,8 +36,12 @@ def ping(url: str, label: str) -> bool:
                     print(f"[{ts}] OK  {label}: HTTP {resp.status} (attempt {attempt}/{MAX_ATTEMPTS})")
                     return True
                 print(f"[{ts}] WARN {label}: unexpected HTTP {resp.status} (attempt {attempt}/{MAX_ATTEMPTS})")
+                if resp.status < 500 and resp.status not in RETRYABLE_HTTP_STATUS_CODES:
+                    return False
         except urllib.error.HTTPError as e:
             print(f"[{ts}] WARN {label}: HTTP {e.code} (attempt {attempt}/{MAX_ATTEMPTS})")
+            if e.code < 500 and e.code not in RETRYABLE_HTTP_STATUS_CODES:
+                return False
         except urllib.error.URLError as e:
             print(f"[{ts}] WARN {label}: {e} (attempt {attempt}/{MAX_ATTEMPTS})")
         except Exception as e:
