@@ -1,8 +1,8 @@
 """
-keep_alive.py — Pings the HF Space to prevent sleep after 48h inactivity.
+keep_alive.py — Pings HF Spaces to prevent sleep after 48h inactivity.
 
 The script:
-  1. Hits the Streamlit health endpoint to verify the Space is alive
+  1. Hits the Streamlit health endpoint to verify each Space is alive
   2. Hits the main app page to simulate a user visit (counts as activity)
 
 Usage:
@@ -15,8 +15,10 @@ import urllib.error
 import time
 from datetime import datetime, timezone
 
-SPACE_APP_URL = "https://stats-powered-ai-statdetectllm.hf.space"
-HEALTH_URL    = f"{SPACE_APP_URL}/_stcore/health"
+SPACES = [
+    "https://stats-powered-ai-statdetectllm.hf.space",
+    "https://anonymouspapersubmission123-statdetectllm.hf.space",
+]
 MAX_ATTEMPTS = 4
 RETRY_DELAY_SECONDS = 15
 RETRYABLE_HTTP_STATUS_CODES = {408, 429}
@@ -54,19 +56,25 @@ def ping(url: str, label: str) -> bool:
 
 
 def run_keep_alive(attempts: int = MAX_ATTEMPTS, retry_delay: int = RETRY_DELAY_SECONDS) -> int:
-    """Retry the health/page checks to tolerate temporary wake-up outages."""
-    for attempt in range(1, attempts + 1):
-        ok1 = ping(HEALTH_URL,    "Health check  ")
-        ok2 = ping(SPACE_APP_URL, "App page visit")
-        if ok1 and ok2:
-            return 0
+    """Retry the health/page checks for all spaces to tolerate temporary wake-up outages."""
+    exit_code = 0
+    for space_url in SPACES:
+        health_url = f"{space_url}/_stcore/health"
+        label_prefix = space_url.split("//", 1)[-1]
+        for attempt in range(1, attempts + 1):
+            ok1 = ping(health_url, f"Health check   [{label_prefix}]")
+            ok2 = ping(space_url,  f"App page visit [{label_prefix}]")
+            if ok1 and ok2:
+                break
 
-        if attempt < attempts:
-            ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-            print(f"[{ts}] WARN Retrying both checks in {retry_delay}s (attempt {attempt + 1}/{attempts})")
-            time.sleep(retry_delay)
+            if attempt < attempts:
+                ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+                print(f"[{ts}] WARN Retrying both checks in {retry_delay}s (attempt {attempt + 1}/{attempts})")
+                time.sleep(retry_delay)
+        else:
+            exit_code = 1
 
-    return 1
+    return exit_code
 
 
 if __name__ == "__main__":
