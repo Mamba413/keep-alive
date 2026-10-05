@@ -1,3 +1,4 @@
+# Repository maintenance note: this workflow is intentionally kept active.
 name: Keep HF Space Alive
 
 on:
